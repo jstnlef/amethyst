@@ -4,8 +4,11 @@ use amethyst::{
     core::{bundle::SystemBundle, frame_limiter::FrameRateLimitStrategy, SystemDesc},
     ecs::{DispatcherBuilder, Read, System, SystemData, World, Write},
     network::simulation::{
-        laminar::{LaminarNetworkBundle, LaminarSocket},
-        DeliveryRequirement, NetworkSimulationEvent, SimulationTransportResource,
+        //        laminar::{LaminarNetworkBundle, LaminarSocket},
+        tcp::TcpNetworkBundle,
+        DeliveryRequirement,
+        NetworkSimulationEvent,
+        TransportResource,
         UrgencyRequirement,
     },
     prelude::*,
@@ -14,40 +17,34 @@ use amethyst::{
     Result,
 };
 use log::info;
-
-// You'll likely want to use a type alias for any place you specify the `SimulationTransportResource<T>` so
-// that, if changed, it will only need to be changed in one place.
-type SimulationTransportResourceImpl = SimulationTransportResource<LaminarSocket>;
+use std::net::TcpListener;
 
 fn main() -> Result<()> {
     amethyst::start_logger(Default::default());
 
-    let socket = LaminarSocket::bind("0.0.0.0:3457").expect("Should bind");
+    let listener = TcpListener::bind("0.0.0.0:3457")?;
+    listener.set_nonblocking(true);
 
     let assets_dir = application_root_dir()?.join("./");
-
-    let mut net = SimulationTransportResource::new();
-    net.set_socket(socket);
 
     // XXX: This is gross. We really need a handshake in laminar. Reliable delivery will not work
     // unless you send an unreliable message first and begin the client BEFORE the 5 second disconnect
     // timer.
-    net.send_with_requirements(
-        "127.0.0.1:3455".parse().unwrap(),
-        b"",
-        DeliveryRequirement::Unreliable,
-        UrgencyRequirement::OnTick,
-    );
+    //    net.send_with_requirements(
+    //        "127.0.0.1:3455".parse().unwrap(),
+    //        b"",
+    //        DeliveryRequirement::Unreliable,
+    //        UrgencyRequirement::Immediate,
+    //    );
 
     let game_data = GameDataBuilder::default()
-        .with_bundle(LaminarNetworkBundle)?
+        .with_bundle(TcpNetworkBundle::new(Some(listener), 1500))?
         .with_bundle(SpamReceiveBundle)?;
     let mut game = Application::build(assets_dir, GameState)?
         .with_frame_limit(
             FrameRateLimitStrategy::SleepAndYield(Duration::from_millis(2)),
             60,
         )
-        .with_resource(net)
         .build(game_data)?;
     game.run();
     Ok(())
@@ -102,7 +99,7 @@ impl SpamReceiveSystem {
 
 impl<'a> System<'a> for SpamReceiveSystem {
     type SystemData = (
-        Write<'a, SimulationTransportResourceImpl>,
+        Write<'a, TransportResource>,
         Read<'a, EventChannel<NetworkSimulationEvent>>,
     );
 
@@ -115,7 +112,7 @@ impl<'a> System<'a> for SpamReceiveSystem {
                     // be exchanging messages at a constant rate. Laminar makes use of this by
                     // packaging message acks with the next sent message. Therefore, in order for
                     // reliability to work properly, we'll send a generic "ok" response.
-                    net.send("127.0.0.1:3455".parse().unwrap(), b"ok");
+                    net.send(*addr, b"ok");
                 }
                 NetworkSimulationEvent::Connect(addr) => info!("New client connection: {}", addr),
                 NetworkSimulationEvent::Disconnect(addr) => {

@@ -49,7 +49,7 @@ impl NetworkSimulationTime {
 
     /// Determines whether or not to send a message in the current frame based on the
     /// `message_send_rate`
-    pub fn should_send_message_this_frame(&self) -> bool {
+    pub fn should_send_messages(&self) -> bool {
         self.should_send_message(self.frame_number)
     }
 
@@ -154,7 +154,7 @@ mod tests {
             // every second frame (even) should return true
             if i % 2 == 0 {
                 assert_eq!(time.should_send_message(i), true);
-            }else {
+            } else {
                 assert_eq!(time.should_send_message(i), false);
             }
         }
