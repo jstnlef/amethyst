@@ -100,7 +100,7 @@ impl<'s> System<'s> for LaminarNetworkSendSystem {
 
 struct LaminarNetworkPollSystem;
 
-impl<'s> System<'s> for LaminarNetworkPollSystem {
+impl<'s> System<'s> for LaminarNetworkPollSystem {I
     type SystemData = Write<'s, SimulationTransportResource<LaminarSocket>>;
 
     fn run(&mut self, mut net: Self::SystemData) {
